@@ -71,7 +71,10 @@ int main()  /* Main function. */
     // fprintf(outfile, "terminals   response time  number in queue     of CPU");
 
     fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
-    fprintf(outfile, "| nbTrm | AvrRspTimeCPU1 | AvrRspTimeCPU2 | AvrNbQueueCPU1 | AvrNbQueueCPU2 |   UtilOfCPU1   |   UtilOfCPU2   |\n");
+    fprintf(outfile, "| numbe | Average respon | Average respon | Average number | Average number | Utilization of | Utilization of |\n");
+    fprintf(outfile, "| r of  | se time CPU 1  | se time CPU 2  | in queue CPU 1 | in queue CPU 2 | CPU 1          | CPU 2          |\n");
+    fprintf(outfile, "| termi |                |                |                |                |                |                |\n");
+    fprintf(outfile, "| nals  |                |                |                |                |                |                |\n");
     fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
     
 
