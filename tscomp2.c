@@ -15,6 +15,7 @@
 #define EVENT_END_CPU_RUN_2    2  /* Event type for end of a second CPU run. */
 #define LIST_CPU_1             1  /* List number for CPU. */
 #define LIST_CPU_2             2  /* List number for CPU. */
+#define LIST_QUEUE_0           10  /* List number for CPU queue. */
 #define LIST_QUEUE_1           11  /* List number for CPU queue. */
 #define LIST_QUEUE_2           12  /* List number for CPU queue. */
 #define SAMPST_RESPONSE_TIMES_1  1  /* sampst variable for response times for first CPU. */
@@ -27,6 +28,7 @@
 
 int   min_terms, max_terms, incr_terms, num_terms, num_responses,
       num_responses_required, term;
+int max_queue_1, max_queue_2, neff_queue_1, neff_queue_2;
 float mean_think, mean_service, quantum, swap;
 double random_value;
 FILE  *infile, *outfile;
@@ -47,35 +49,39 @@ int main()  /* Main function. */
     /* Open input and output files. */
 
     infile  = fopen("tscomp.in",  "r");
-    outfile = fopen("tscomp_2.out", "w");
+    outfile = fopen("tscomp_2_5.out", "w");
 
     /* Read input parameters. */
 
-    fscanf(infile, "%d %d %d %d %f %f %f %f",
+    fscanf(infile, "%d %d %d %d %f %f %f %f %d %d",
            &min_terms, &max_terms, &incr_terms, &num_responses_required,
-           &mean_think, &mean_service, &quantum, &swap);
+           &mean_think, &mean_service, &quantum, &swap, &max_queue_1, &max_queue_2);
 
     /* Write report heading and input parameters. */
 
     fprintf(outfile, "Time-shared computer model\n\n");
     fprintf(outfile, "Number of terminals%9d to%4d by %4d\n\n",
             min_terms, max_terms, incr_terms);
-    fprintf(outfile, "Mean think time  %11.3f seconds\n\n", mean_think);
-    fprintf(outfile, "Mean service time%11.3f seconds\n\n", mean_service);
-    fprintf(outfile, "Quantum          %11.3f seconds\n\n", quantum);
-    fprintf(outfile, "Swap time        %11.3f seconds\n\n", swap);
-    fprintf(outfile, "Number of jobs processed%12d\n\n\n",
+    fprintf(outfile, "Mean think time  %11.3f seconds\n", mean_think);
+    fprintf(outfile, "Mean service time%11.3f seconds\n", mean_service);
+    fprintf(outfile, "Quantum          %11.3f seconds\n", quantum);
+    fprintf(outfile, "Swap time        %11.3f seconds\n", swap);
+    fprintf(outfile, "Number of jobs processed%12d\n",
             num_responses_required);
+    fprintf(outfile, "Maximal queue 1 size %12d\n",
+            max_queue_1);
+    fprintf(outfile, "Maximal queue 2 size %12d\n\n",
+            max_queue_2);
     // fprintf(outfile, "Number of      Average         Average");
     // fprintf(outfile, "       Utilization\n");
     // fprintf(outfile, "terminals   response time  number in queue     of CPU");
 
-    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
-    fprintf(outfile, "| numbe | Average respon | Average respon | Average number | Average number | Utilization of | Utilization of |\n");
-    fprintf(outfile, "| r of  | se time CPU 1  | se time CPU 2  | in queue CPU 1 | in queue CPU 2 | CPU 1          | CPU 2          |\n");
-    fprintf(outfile, "| termi |                |                |                |                |                |                |\n");
-    fprintf(outfile, "| nals  |                |                |                |                |                |                |\n");
-    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
+    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
+    fprintf(outfile, "| numbe | Average respon | Average respon | Average number | Average number | Average number | Utilization of | Utilization of |\n");
+    fprintf(outfile, "| r of  | se time CPU 1  | se time CPU 2  | in queue global| in queue CPU 1 | in queue CPU 2 | CPU 1          | CPU 2          |\n");
+    fprintf(outfile, "| termi |                |                |                |                |                |                |                |\n");
+    fprintf(outfile, "| nals  |                |                |                |                |                |                |                |\n");
+    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
     
 
     /* Run the simulation varying the number of terminals. */
@@ -153,24 +159,40 @@ void arrive(void)  /* Event function for arrival of job at CPU after think
     transfer[1] = sim_time;
     transfer[2] = expon(mean_service, STREAM_SERVICE);
     // list_file(LAST, LIST_QUEUE);
+    
+    /* Both server queue has room */
 
-    /* Allocate job randomly for two CPU */
-    random_value = (double)rand()/RAND_MAX;
-    if (random_value < 0.5)
-      list_file(LAST, LIST_QUEUE_1);
-    else
-      list_file(LAST, LIST_QUEUE_2);
+    neff_queue_1 = list_size[LIST_QUEUE_1];
+    neff_queue_2 = list_size[LIST_QUEUE_2];
+
+    if ((neff_queue_1 < max_queue_1) && (neff_queue_2 < max_queue_2)) {
+        /* Allocate job randomly for two CPU */
+        random_value = (double)rand()/RAND_MAX;
+        if (random_value < 0.5) {
+            list_file(LAST, LIST_QUEUE_1);
+        } else {
+            list_file(LAST, LIST_QUEUE_2);
+        }
+    } else {
+        if (neff_queue_1 < max_queue_1) {
+        /* Room only on server 1 queue */
+            list_file(LAST, LIST_QUEUE_1);
+        } else if (neff_queue_2 < max_queue_2) {
+        /* Room only on server 2 queue */
+            list_file(LAST, LIST_QUEUE_2);
+        } else {
+            /* No room available server  queue */
+            list_file(LAST, LIST_QUEUE_0);
+        }
+    }
 
     /* If the CPU is idle, start a CPU run. */
     if (list_size[LIST_CPU_1] == 0 && list_size[LIST_QUEUE_1] > 0) {
         start_CPU_run(LIST_CPU_1);
-    } else if (list_size[LIST_CPU_2] == 0 && list_size[LIST_QUEUE_2] > 0) {
+    }
+    if (list_size[LIST_CPU_2] == 0 && list_size[LIST_QUEUE_2] > 0) {
         start_CPU_run(LIST_CPU_2);
     }
-
-
-    // if (list_size[LIST_CPU] == 0)
-    //     start_CPU_run(0);
 }
 
 
@@ -230,17 +252,20 @@ void end_CPU_run(int id)  /* Event function to end a CPU run of a job. */
 
     if (transfer[2] > 0.0) {
 
-        /* This job requires more CPU time, so place it at the end of the queue
-           and start the first job in the queue. */
+        /* This job requires more CPU time, so place it at the end of the CPU queue
+           and start the first job in the CPU queue. */
 
         list_file(LAST, id + 10);
 
         /* If the CPU is idle, start a CPU run. */
-        if (list_size[LIST_CPU_1] == 0 && list_size[LIST_QUEUE_1] > 0) {
-            start_CPU_run(LIST_CPU_1);
-        } else if (list_size[LIST_CPU_2] == 0 && list_size[LIST_QUEUE_2] > 0) {
-            start_CPU_run(LIST_CPU_2);
+        if (list_size[id + 10] > 0) {
+            start_CPU_run(id);
         }
+        // if (list_size[LIST_CPU_1] == 0 && list_size[LIST_QUEUE_1] > 0) {
+        //     start_CPU_run(LIST_CPU_1);
+        // } else if (list_size[LIST_CPU_2] == 0 && list_size[LIST_QUEUE_2] > 0) {
+        //     start_CPU_run(LIST_CPU_2);
+        // }
     }
 
     else {
@@ -279,10 +304,14 @@ void end_CPU_run(int id)  /* Event function to end a CPU run of a job. */
             /* Not enough jobs are done; if the queue is not empty, start
                another job. */
 
-            if (list_size[LIST_QUEUE_1] > 0) {
-                start_CPU_run(LIST_CPU_1);
-            } else if (list_size[LIST_QUEUE_2] > 0) {
-                start_CPU_run(LIST_CPU_2);
+            /* Get job from global queue */
+            if (list_size[LIST_QUEUE_0] > 0) {
+                list_remove(FIRST, LIST_QUEUE_0);
+                list_file (LAST, id + 10);
+            }
+
+            if (list_size[id + 10] > 0) {
+                start_CPU_run(id);
             }
     }
 }
@@ -299,11 +328,12 @@ void report(void)  /* Report generator function. */
         +-------+----------------+----------------+----------------+----------------+----------------+----------------+
     */
     /* Get and write out estimates of desired measures of performance. */
-    fprintf(outfile, "| %5d | %*.3f | %*.3f | %*.3f | %*.3f | %*.3f | %*.3f |\n", 
+    fprintf(outfile, "| %5d | %*.3f | %*.3f | %*.3f | %*.3f | %*.3f | %*.3f | %*.3f |\n", 
         num_terms, 14, sampst(0.0, -SAMPST_RESPONSE_TIMES_1), 14, sampst(0.0, -SAMPST_RESPONSE_TIMES_2),
+        14, filest(LIST_QUEUE_0),
         14, filest(LIST_QUEUE_1),14, filest(LIST_QUEUE_2),
         14, filest(LIST_CPU_1), 14, filest(LIST_CPU_2));
-    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
+    fprintf(outfile, "+-------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+\n");
 
 }
 
